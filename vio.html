@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Violin Trainer Final: 交互式全能训练</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+        }
+        /* 首页样式 */
+        #landing-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        #landing-page h1 { font-size: 32px; color: #333; margin-bottom: 20px; }
+        #landing-page p { font-size: 18px; color: #666; margin: 5px 0; }
+        #landing-page a { font-size: 20px; color: blue; text-decoration: underline; margin-bottom: 40px; }
+        #landing-page button {
+            padding: 15px 40px; font-size: 20px; cursor: pointer;
+            background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 8px;
+            transition: 0.2s;
+        }
+        #landing-page button:hover { background-color: #e0e0e0; }
+        .footer { position: absolute; bottom: 20px; color: #aaa; font-size: 12px; }
+
+        /* 主程序样式 */
+        #main-app {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            padding: 20px;
+        }
+        .nav-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;}
+        .nav-bar button {
+            padding: 10px 15px; font-size: 16px; cursor: pointer;
+            border: 1px solid #ccc; border-radius: 5px; background-color: white;
+            transition: 0.3s;
+        }
+        .nav-bar button.active { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; }
+        
+        canvas { background-color: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: crosshair; }
+        
+        .interactive-area { margin-top: 20px; text-align: center; height: 180px; }
+        #prompt-label { font-size: 24px; font-weight: bold; color: blue; margin-bottom: 15px; display: none; }
+        
+        /* 输入框区域 */
+        #input-area { display: flex; align-items: center; justify-content: center; gap: 10px; display: none; }
+        #input-area input { padding: 8px; font-size: 18px; width: 100px; text-align: center; text-transform: uppercase; }
+        
+        /* 按钮选择区域 (模式4) */
+        #btn-area { display: flex; gap: 10px; justify-content: center; display: none; }
+        #btn-area button {
+            width: 50px; height: 50px; font-size: 20px; font-weight: bold; cursor: pointer;
+            border: 2px solid #007bff; border-radius: 25px; background-color: white; color: #007bff;
+            transition: 0.2s;
+        }
+        #btn-area button:hover { background-color: #e6f2ff; }
+        
+        #msg-label { font-size: 18px; margin-top: 20px; color: gray; height: 24px; }
+        #score-label { font-size: 16px; margin-top: 15px; color: #333; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 首页 -->
+    <div id="landing-page">
+        <h1>欢迎使用小提琴音感训练器</h1>
+        <p>如有 bug 请反馈到:</p>
+        <a>deepas@foxmail.com</a>
+        <button onclick="startMainApp()">确定</button>
+        <div class="footer">Design for Engineer Thinking</div>
+    </div>
+
+    <!-- 主程序 -->
+    <div id="main-app">
+        <!-- 导航栏 -->
+        <div class="nav-bar">
+            <button id="btn-m1" onclick="switchMode(1)">模式1: 谱->指法</button>
+            <button id="btn-m2" onclick="switchMode(2)">模式2: 名->指法</button>
+            <button id="btn-m3" onclick="switchMode(3)">模式3: 名->点谱</button>
+            <button id="btn-m4" onclick="switchMode(4)">模式4: 谱->认音</button>
+        </div>
+
+        <!-- 绘图区 -->
+        <canvas id="staff-canvas" width="600" height="300"></canvas>
+
+        <!-- 交互控制区 -->
+        <div class="interactive-area">
+            <div id="prompt-label"></div>
+            
+            <div id="input-area">
+                <label style="font-size: 18px;">输入指法 (如 A1): </label>
+                <input type="text" id="user-input" autocomplete="off">
+            </div>
+
+            <div id="btn-area">
+                <button onclick="checkBtnAnswer('C')">C</button>
+                <button onclick="checkBtnAnswer('D')">D</button>
+                <button onclick="checkBtnAnswer('E')">E</button>
+                <button onclick="checkBtnAnswer('F')">F</button>
+                <button onclick="checkBtnAnswer('G')">G</button>
+                <button onclick="checkBtnAnswer('A')">A</button>
+                <button onclick="checkBtnAnswer('B')">B</button>
+            </div>
+
+            <div id="msg-label">准备开始</div>
+            <div id="score-label">得分: 0 / 0</div>
+        </div>
+    </div>
+
+<script>
+    // --- 数据配置 ---
+    const notesDb = [
+        {name: "G3", solfege: "Sol (低)", finger: ["G0"], pos: -5},
+        {name: "A3", solfege: "La (低)",  finger: ["G1"], pos: -4},
+        {name: "B3", solfege: "Si (低)",  finger: ["G2"], pos: -3},
+        {name: "C4", solfege: "Do (中)",  finger: ["G3"], pos: -2},
+        {name: "D4", solfege: "Re (中)",  finger: ["D0"], pos: -1}, 
+        {name: "E4", solfege: "Mi (中)",  finger: ["D1"], pos: 0},  
+        {name: "F4", solfege: "Fa (中)",  finger: ["D2"], pos: 1},
+        {name: "G4", solfege: "Sol (中)", finger: ["D3"], pos: 2},
+        {name: "A4", solfege: "La (中)",  finger: ["A0"], pos: 3},
+        {name: "B4", solfege: "Si (高)",  finger: ["A1"], pos: 4},
+        {name: "C5", solfege: "Do (高)",  finger: ["A2"], pos: 5},
+        {name: "D5", solfege: "Re (高)",  finger: ["A3"], pos: 6},
+        {name: "E5", solfege: "Mi (高)",  finger: ["E0"], pos: 7},
+        {name: "F5", solfege: "Fa (高)",  finger: ["E1"], pos: 8},
+        {name: "G5", solfege: "Sol (高)", finger: ["E2"], pos: 9},
+        {name: "A5", solfege: "La (高)",  finger: ["E3"], pos: 10},
+        {name: "B5", solfege: "Si (高)",  finger: ["E4"], pos: 11}
+    ];
+
+    const canvas = document.getElementById('staff-canvas');
+    const ctx = canvas.getContext('2d');
+    const lineSpacing = 20;
+    const baseY = 180; // E4 的位置
+
+    let currentMode = 1;
+    let currentTarget = null;
+    let score = 0;
+    let total = 0;
+    let waitTimer = null; // 防止过快点击
+
+    // --- 初始化 ---
+    function startMainApp() {
+        document.getElementById('landing-page').style.display = 'none';
+        document.getElementById('main-app').style.display = 'flex';
+        switchMode(1);
+    }
+
+    function switchMode(mode) {
+        currentMode = mode;
+        score = 0;
+        total = 0;
+        updateScoreLabel();
+        
+        document.getElementById('user-input').value = "";
+        document.getElementById('msg-label').innerText = "准备开始";
+        document.getElementById('msg-label').style.color = "gray";
+
+        // 更新导航栏激活状态
+        for(let i=1; i<=4; i++) {
+            document.getElementById(`btn-m${i}`).classList.remove('active');
+        }
+        document.getElementById(`btn-m${mode}`).classList.add('active');
+
+        // 控制 UI 显示/隐藏
+        const promptLabel = document.getElementById('prompt-label');
+        const inputArea = document.getElementById('input-area');
+        const btnArea = document.getElementById('btn-area');
+
+        promptLabel.style.display = 'none';
+        inputArea.style.display = 'none';
+        btnArea.style.display = 'none';
+
+        if (mode === 1) {
+            document.title = "模式 1: 谱 -> 指法";
+            inputArea.style.display = 'flex';
+            document.getElementById('user-input').focus();
+        } else if (mode === 2) {
+            document.title = "模式 2: 名 -> 指法";
+            inputArea.style.display = 'flex';
+            promptLabel.style.display = 'block';
+            document.getElementById('user-input').focus();
+        } else if (mode === 3) {
+            document.title = "模式 3: 名 -> 点谱";
+            promptLabel.style.display = 'block';
+        } else if (mode === 4) {
+            document.title = "模式 4: 谱 -> 认音";
+            btnArea.style.display = 'flex';
+            promptLabel.style.display = 'block';
+        }
+
+        nextQuestion();
+    }
+
+    // --- 绘图功能 ---
+    function drawStaffBackground() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 2;
+        // 画5条线
+        for (let i = 0; i < 5; i++) {
+            let y = baseY - (i * lineSpacing);
+            ctx.beginPath();
+            ctx.moveTo(50, y);
+            ctx.lineTo(550, y);
+            ctx.stroke();
+        }
+        // 画谱号
+        ctx.font = "60px Arial";
+        ctx.fillStyle = "black";
+        ctx.fillText("🎼", 60, baseY - 15);
+    }
+
+    function drawNoteAtIndex(posIndex, color = "black") {
+        let noteY = baseY - (posIndex * (lineSpacing / 2));
+        let rX = 12, rY = 9;
+
+        // 画符头
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(300, noteY, rX, rY, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 画符干
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (posIndex >= 4) {
+            ctx.moveTo(300 - rX, noteY);
+            ctx.lineTo(300 - rX, noteY + 50);
+        } else {
+            ctx.moveTo(300 + rX, noteY);
+            ctx.lineTo(300 + rX, noteY - 50);
+        }
+        ctx.stroke();
+
+        // 画加线
+        let lineColor = color === "black" ? "black" : color;
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
+        
+        if (posIndex < 0) {
+            for (let curr = -2; curr >= posIndex; curr -= 2) {
+                let y = baseY - (curr * lineSpacing / 2);
+                ctx.beginPath(); ctx.moveTo(270, y); ctx.lineTo(330, y); ctx.stroke();
+            }
+        }
+        if (posIndex > 8) {
+            for (let curr = 10; curr <= posIndex; curr += 2) {
+                let y = baseY - (curr * lineSpacing / 2);
+                ctx.beginPath(); ctx.moveTo(270, y); ctx.lineTo(330, y); ctx.stroke();
+            }
+        }
+    }
+
+    function nextQuestion() {
+        if(waitTimer) clearTimeout(waitTimer);
+        currentTarget = notesDb[Math.floor(Math.random() * notesDb.length)];
+        drawStaffBackground();
+        
+        const inputEl = document.getElementById('user-input');
+        inputEl.value = "";
+        document.getElementById('msg-label').innerText = "...";
+        document.getElementById('msg-label').style.color = "gray";
+
+        const promptEl = document.getElementById('prompt-label');
+
+        if (currentMode === 1) {
+            drawNoteAtIndex(currentTarget.pos);
+        } else if (currentMode === 2) {
+            promptEl.innerText = `请找出: ${currentTarget.solfege}`;
+        } else if (currentMode === 3) {
+            promptEl.innerText = `移鼠标预览，点击选择: ${currentTarget.solfege}`;
+        } else if (currentMode === 4) {
+            promptEl.innerText = "这是什么音？";
+            drawNoteAtIndex(currentTarget.pos);
+        }
+    }
+
+    // --- 交互处理 ---
+    // 1. 文本输入 (模式 1, 2)
+    document.getElementById('user-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') checkTextAnswer();
+    });
+
+    function checkTextAnswer() {
+        if (currentMode !== 1 && currentMode !== 2) return;
+        const userInput = document.getElementById('user-input').value.trim().toUpperCase();
+        if(!userInput) return;
+
+        const correctFingers = currentTarget.finger;
+        const msgLabel = document.getElementById('msg-label');
+
+        if (correctFingers.includes(userInput)) {
+            score++;
+            msgLabel.innerText = "✅ 正确!";
+            msgLabel.style.color = "green";
+            waitTimer = setTimeout(nextQuestion, 600);
+        } else {
+            msgLabel.innerText = `❌ 错误. 应该是: ${correctFingers.join(" 或 ")}`;
+            msgLabel.style.color = "red";
+        }
+        total++;
+        updateScoreLabel();
+        document.getElementById('user-input').select();
+    }
+
+    // 2. 鼠标悬停预览 (模式 3)
+    canvas.addEventListener('mousemove', function(e) {
+        if (currentMode !== 3) return;
+        const rect = canvas.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        const dist = baseY - clickY;
+        const previewPos = Math.round(dist / (lineSpacing / 2));
+        
+        if (previewPos < -8 || previewPos > 15) {
+            drawStaffBackground();
+            return;
+        }
+        drawStaffBackground();
+        drawNoteAtIndex(previewPos, "#888888"); // 画灰色幽灵音符
+    });
+
+    // 3. 鼠标点击画布 (模式 3)
+    canvas.addEventListener('mousedown', function(e) {
+        if (currentMode !== 3) return;
+        const rect = canvas.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        const dist = baseY - clickY;
+        const clickedPos = Math.round(dist / (lineSpacing / 2));
+        const targetPos = currentTarget.pos;
+
+        const msgLabel = document.getElementById('msg-label');
+        
+        if (clickedPos === targetPos) {
+            score++;
+            msgLabel.innerText = "✅ 正确!";
+            msgLabel.style.color = "green";
+            drawStaffBackground();
+            drawNoteAtIndex(targetPos, "green");
+            waitTimer = setTimeout(nextQuestion, 800);
+        } else {
+            let clickedNoteName = "未知音符";
+            let found = notesDb.find(n => n.pos === clickedPos);
+            if(found) clickedNoteName = found.solfege;
+            
+            msgLabel.innerText = `❌ 不对，那是 ${clickedNoteName}`;
+            msgLabel.style.color = "red";
+            drawStaffBackground();
+            drawNoteAtIndex(clickedPos, "red");
+        }
+        total++;
+        updateScoreLabel();
+    });
+
+    // 4. 点击音名按钮 (模式 4)
+    function checkBtnAnswer(selectedNote) {
+        if (currentMode !== 4) return;
+        const msgLabel = document.getElementById('msg-label');
+        
+        // 提取正确音名，例如从 "G4" 提取 "G"
+        const correctNote = currentTarget.name.charAt(0);
+        
+        if (selectedNote === correctNote) {
+            score++;
+            msgLabel.innerText = "✅ 正确!";
+            msgLabel.style.color = "green";
+            waitTimer = setTimeout(nextQuestion, 600);
+        } else {
+            msgLabel.innerText = `❌ 错误. 应该是: ${correctNote}`;
+            msgLabel.style.color = "red";
+        }
+        total++;
+        updateScoreLabel();
+    }
+
+    function updateScoreLabel() {
+        document.getElementById('score-label').innerText = `得分: ${score} / ${total}`;
+    }
+
+</script>
+</body>
+</html>
